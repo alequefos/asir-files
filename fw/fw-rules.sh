@@ -1,72 +1,100 @@
-
 #!/bin/sh
+
 if [ $# -ne 1 ]
 	then
-		echo "NECESITO un PARAMETRO start o stop"
-exit 0
-fi 
-	case $1 in
-	"start")
+	 echo "Necesito un parametro [start | stop]"
+	exit 1
+fi
 
-#REGLAS BASICAS
-iptables -P INPUT DROP
-iptables -P OUTPUT DROP
-iptables -P FORWARD DROP
+case $1 in
+"start")
+DMZ_NET="172.20.109.0/24"
+LAN_NET="192.168.109.0/24"
 
-#ACCESO DE LA REGLAS DE LA WAN
+DMZ_IF="ens3"
+WAN_IF="ens8"
+LAN_IF="ens9"
 
-iptables -A INPUT -i ens4 -d 10.3.4.193 -p tcp --dport 2222 -j ACCEPT
-iptables -A OUTPUT -o ens4 -s 10.3.4.193 -p tcp --sport 2222 -j ACCEPT
+DMZ_IP="172.20.109.254"
+WAN_IP="10.3.4.138"
+LAN_IP="192.168.109.254"
 
-#ACCESO A LAS REGLAS DE LA LAN
+# default policies
 
-iptables -A INPUT -i ens10 -d 192.168.111.254 -p tcp --dport 2222 -j ACCEPT
-iptables -A OUTPUT -o ens10 -s 192.168.111.0/24 -p tcp --sport 2222 -j ACCEPT
+	iptables -P INPUT DROP
+	iptables -P OUTPUT DROP
+	iptables -P FORWARD DROP
 
-#ACCESO A LAS REGLAS DE LA DMZ
+	# SSH LAN access rules
 
-iptables -A INPUT -i ens3 -d 172.20.111.254 -p tcp --dport 2222 -j ACCEPT
-iptables -A OUTPUT -o ens3 -s 172.20.111.0/24 -p tcp --sport 2222 -j ACCEPT
+	iptables -A INPUT -i $LAN_IF -d $LAN_IP -p TCP --dport 2222 -j ACCEPT
+	iptables -A OUTPUT -o $LAN_IF -s $LAN_IP -p TCP --sport 2222 -j ACCEPT
 
-#ACCESo A LAS REGLAS DEL DHCP
-iptables -A OUTPUT -o ens8 -p udp --dport 67 --sport 68 -j ACCEPT
-iptables -A INPUT -i ens8 -p udp --sport 67 --dport 68 -j ACCEPT
+	# SSH WAN access rules
 
-#REGLA 8
-iptables -A FORWARD -s 192.168.111.0/24 -d 172.20.111.0/24 -p tcp --dport 22 -j ACCEPT
-#REGLA 9
-iptables -A FORWARD -s 192.168.111.0/24 -d 172.20.111.0/24 -p udp --dport 53 -j ACCEPT
-#REGLA 10
-iptables -A FORWARD -s 192.168.111.0/24 -d 172.20.111.0/24 -p tcp --dport 80 -j ACCEPT
-#REGLA 11
-iptables -A FORWARD -s 192.168.111.0/24 -d 172.20.111.0/24 -p tcp --dport 443 -j ACCEPT
-#REGLA 12
-iptables -A FORWARD -p icmp -j ACCEPT
-iptables -A INPUT -p icmp -j ACCEPT
-iptables -A OUTPUT -p icmp -j ACCEPT
-#REGLAS 13
-iptables -A FORWARD -s 192.168.111.0/24 -d 172.20.111.0/24 -p tcp --dport 80 -i ens8 -j ACCEPT
-#REGLAS 14
-iptables -A FORWARD -s 192.168.111.0/24 -d 172.20.111.0/24 -p tcp --dport 443 -i ens8 -j ACCEPT
-#REGLA POSTFORWARDING
-iptables -t nat -A PREROUTING -i ens8 -p tcp --dport 80 -j DNAT --to 172.20.111.22
+	iptables -A INPUT -i $WAN_IF -d $WAN_IP -p TCP --dport 2222 -j ACCEPT
+	iptables -A OUTPUT -o $WAN_IF -s $WAN_IP -p TCP --sport 2222 -j ACCEPT
 
-iptables -t nat -A PREROUTING -i ens8 -d 10.3.4.193 -p tcp --dport 22 -j DNAT --to 172.20.111.22
-iptables -A FORWARD -i ens8 -o ens3 -p tcp --dport 22 -d 172.20.111.22 -j ACCEPT
-iptables -A FORWARD -i ens3 -o ens8 -p tcp --sport 22 -s 172.20.111.22 -j ACCEPT
+	# SSH  DMZ access rules
+
+	iptables -A INPUT -i $DMZ_IF -d $DMZ_IP -p TCP --dport 2222 -j ACCEPT
+	iptables -A OUTPUT -o $DMZ_IF -s $DMZ_IP -p TCP --sport 2222 -j ACCEPT
+
+	# DHCP access rules DMZ
+
+	iptables -A OUTPUT -o $WAN_IF -p udp --dport 67 --sport 68 -j ACCEPT
+	iptables -A INPUT -i $WAN_IF -p udp --sport 67 --dport 68 -j ACCEPT
 
 
-;;
+	#REGLA 8
+	iptables -A FORWARD -s $LAN_NET -d $DMZ_NET -p tcp --dport 22 -j ACCEPT
+	#REGLA 9
+	iptables -A FORWARD -s $LAN_NET -d $DMZ_NET -p udp --dport 53 -j ACCEPT
+	#REGLA 10
+	iptables -A FORWARD -s $LAN_NET -d $DMZ_NET -p tcp --dport 80 -j ACCEPT
+	#REGLA 11
+	iptables -A FORWARD -s $LAN_NET -d $DMZ_NET -p tcp --dport 443 -j ACCEPT
+	#REGLA 12
+	iptables -A FORWARD -p icmp -j ACCEPT
+	iptables -A INPUT -p icmp -j ACCEPT
+	iptables -A OUTPUT -p icmp -j ACCEPT
+	#REGLAS 13
+	iptables -A FORWARD -s $LAN_NET -d $DMZ_NET -p tcp --dport 80 -i ens8 -j ACCEPT
+	#REGLAS 14
+	iptables -A FORWARD -s $LAN_NET -d $DMZ_NET -p tcp --dport 443 -i ens8 -j ACCEPT
+	#REGLA POSTFORWARDING
+	iptables -t nat -A PREROUTING -i ens8 -p tcp --dport 80 -j DNAT --to 172.20.111.22
 
+	iptables -t nat -A PREROUTING -i ens8 -d 10.3.4.193 -p tcp --dport 22 -j DNAT --to 172.20.111.22
+	iptables -A FORWARD -i ens8 -o ens3 -p tcp --dport 22 -d 172.20.111.22 -j ACCEPT
+	iptables -A FORWARD -i ens3 -o ens8 -p tcp --sport 22 -s 172.20.111.22 -j ACCEPT
+
+	#PREGUNTA Y RESPUESTA DEL SSH EXTERIOR-WAN
+	iptables -A INPUT -i $WAN_IF -d $WAN_IP -p tcp --dport 2222 -j ACCEPT
+	iptables -A OUTPUT -o $WAN_IF -m state --state ESTABLISHED,RELATED -p tcp --sport 2222 -j ACCEPT
+
+	#PREGUNTA Y RESPUESTA DEL SSH WAN-LAN
+	iptables -A INPUT -i $LAN_IF -d $LAN_IP -p tcp --dport 2222 -j ACCEPT
+	iptables -A OUTPUT -o $LAN_IF -m state --state ESTABLISHED,RELATED -p tcp --sport 2222 -j ACCEPT
+
+	#PREGUNTA Y RESPUESTA DEL SSH LAN-DMZ
+	iptables -A INPUT -i $DMZ_IF -d $DMZ_IP -p tcp --dport 2222 -j ACCEPT
+	iptables -A OUTPUT -o $DMZ_IF -m state --state ESTABLISHED,RELATED -p tcp --sport 2222 -j ACCEPT
+
+
+
+	;;
 "stop")
-iptables -F
-iptables -P INPUT ACCEPT
-iptables -P OUTPUT ACCEPT
-iptables -P FORWARD ACCEPT
-;;
+	iptables -F
+	iptables -P INPUT ACCEPT
+	iptables -P OUTPUT ACCEPT
+	iptables -P FORWARD ACCEPT
+	;;
+
 *)
-echo "SE NECESITA UN PARAMETRPO start o stop"
-	exit
-;;
+	echo "Se necesita un parametro valido [start | stop]"
+	exit 2
+	;;
 esac
 exit 0
+
